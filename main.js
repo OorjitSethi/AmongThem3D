@@ -197,9 +197,9 @@ function createPhysicsFloor() {
     return floorBody;
 }
 
-// Helper function to create a wall with mesh and physics
-function createWallWithMesh(x, y, z, width, height, depth, material) {
-    // Create wall mesh with solid (non-wireframe) material
+// Helper function to create a wall with mesh and physics using ExtrudeGeometry
+function createWallWithMesh(x, y, z, width, height, depth, material, doorways = []) {
+    // Fix wall visibility by using simpler BoxGeometry for walls
     const wallGeometry = new THREE.BoxGeometry(width, height, depth);
     const wallMaterial = new THREE.MeshStandardMaterial({ 
         color: 0x555555, 
@@ -208,25 +208,195 @@ function createWallWithMesh(x, y, z, width, height, depth, material) {
         wireframe: false 
     });
     const wallMesh = new THREE.Mesh(wallGeometry, wallMaterial);
-    wallMesh.position.set(x, y + height/2, z);
+    wallMesh.position.set(x + width/2, y + height/2, z + depth/2);
     wallMesh.castShadow = true;
     wallMesh.receiveShadow = true;
     scene.add(wallMesh);
     
-    // Create wall physics body
-    const wallBody = new CANNON.Body({
-        mass: 0, // Static body
-        shape: new CANNON.Box(new CANNON.Vec3(width/2, height/2, depth/2)),
-        material: wallMaterial,
-        collisionFilterGroup: COLLISION_GROUPS.STATIC,
-        collisionFilterMask: COLLISION_GROUPS.DEFAULT | COLLISION_GROUPS.PLAYER | COLLISION_GROUPS.OBJECTS
-    });
+    // For walls with doorways, we'll create multiple wall segments
+    const wallSegments = [];
+    const createdDoors = [];
     
-    // Position the body
-    wallBody.position.set(x, y + height/2, z);
-    world.addBody(wallBody);
-    
-    return { mesh: wallMesh, body: wallBody };
+    if (doorways && doorways.length > 0) {
+        // Remove the main wall mesh since we'll create segments
+        scene.remove(wallMesh);
+        
+        if (depth < 0.5) { // X-axis wall (horizontal)
+            // Sort doorways by x position
+            const sortedDoors = [...doorways].sort((a, b) => a.x - b.x);
+            
+            let currentX = x;
+            
+            // Create segments between doors
+            for (const door of sortedDoors) {
+                const doorStartX = door.x - door.width / 2;
+                
+                // Create wall segment before the door if needed
+                if (doorStartX > currentX) {
+                    const segmentWidth = doorStartX - currentX;
+                    const segmentMesh = new THREE.Mesh(
+                        new THREE.BoxGeometry(segmentWidth, height, depth),
+                        wallMaterial
+                    );
+                    segmentMesh.position.set(currentX + segmentWidth/2, y + height/2, z + depth/2);
+                    scene.add(segmentMesh);
+                    
+                    // Add segment physics
+                    const segmentBody = new CANNON.Body({
+                        mass: 0,
+                        shape: new CANNON.Box(new CANNON.Vec3(segmentWidth/2, height/2, depth/2)),
+                        position: new CANNON.Vec3(currentX + segmentWidth/2, y + height/2, z + depth/2),
+                        material: wallMaterial,
+                        collisionFilterGroup: COLLISION_GROUPS.STATIC,
+                        collisionFilterMask: COLLISION_GROUPS.DEFAULT | COLLISION_GROUPS.PLAYER | COLLISION_GROUPS.OBJECTS
+                    });
+                    world.addBody(segmentBody);
+                    
+                    wallSegments.push({ mesh: segmentMesh, body: segmentBody });
+                    meshPhysicsPairs.push({ mesh: segmentMesh, body: segmentBody });
+                }
+                
+                // Create the door
+                const doorObj = createDoor(
+                    door.x, // Center x of door
+                    y,
+                    z + depth/2, // Center z of wall
+                    door.width,
+                    height,
+                    depth,
+                    true // Horizontal
+                );
+                createdDoors.push(doorObj);
+                
+                // Update current position
+                currentX = door.x + door.width / 2;
+            }
+            
+            // Create final segment after last door if needed
+            if (currentX < x + width) {
+                const segmentWidth = x + width - currentX;
+                const segmentMesh = new THREE.Mesh(
+                    new THREE.BoxGeometry(segmentWidth, height, depth),
+                    wallMaterial
+                );
+                segmentMesh.position.set(currentX + segmentWidth/2, y + height/2, z + depth/2);
+                scene.add(segmentMesh);
+                
+                // Add segment physics
+                const segmentBody = new CANNON.Body({
+                    mass: 0,
+                    shape: new CANNON.Box(new CANNON.Vec3(segmentWidth/2, height/2, depth/2)),
+                    position: new CANNON.Vec3(currentX + segmentWidth/2, y + height/2, z + depth/2),
+                    material: wallMaterial,
+                    collisionFilterGroup: COLLISION_GROUPS.STATIC,
+                    collisionFilterMask: COLLISION_GROUPS.DEFAULT | COLLISION_GROUPS.PLAYER | COLLISION_GROUPS.OBJECTS
+                });
+                world.addBody(segmentBody);
+                
+                wallSegments.push({ mesh: segmentMesh, body: segmentBody });
+                meshPhysicsPairs.push({ mesh: segmentMesh, body: segmentBody });
+            }
+        } else { // Z-axis wall (vertical)
+            // Sort doorways by z position
+            const sortedDoors = [...doorways].sort((a, b) => a.z - b.z);
+            
+            let currentZ = z;
+            
+            // Create segments between doors
+            for (const door of sortedDoors) {
+                const doorStartZ = door.z - door.width / 2;
+                
+                // Create wall segment before the door if needed
+                if (doorStartZ > currentZ) {
+                    const segmentDepth = doorStartZ - currentZ;
+                    const segmentMesh = new THREE.Mesh(
+                        new THREE.BoxGeometry(width, height, segmentDepth),
+                        wallMaterial
+                    );
+                    segmentMesh.position.set(x + width/2, y + height/2, currentZ + segmentDepth/2);
+                    scene.add(segmentMesh);
+                    
+                    // Add segment physics
+                    const segmentBody = new CANNON.Body({
+                        mass: 0,
+                        shape: new CANNON.Box(new CANNON.Vec3(width/2, height/2, segmentDepth/2)),
+                        position: new CANNON.Vec3(x + width/2, y + height/2, currentZ + segmentDepth/2),
+                        material: wallMaterial,
+                        collisionFilterGroup: COLLISION_GROUPS.STATIC,
+                        collisionFilterMask: COLLISION_GROUPS.DEFAULT | COLLISION_GROUPS.PLAYER | COLLISION_GROUPS.OBJECTS
+                    });
+                    world.addBody(segmentBody);
+                    
+                    wallSegments.push({ mesh: segmentMesh, body: segmentBody });
+                    meshPhysicsPairs.push({ mesh: segmentMesh, body: segmentBody });
+                }
+                
+                // Create the door
+                const doorObj = createDoor(
+                    x + width/2, // Center x of wall
+                    y,
+                    door.z, // Center z of door
+                    width,
+                    height,
+                    door.width,
+                    false // Vertical
+                );
+                createdDoors.push(doorObj);
+                
+                // Update current position
+                currentZ = door.z + door.width / 2;
+            }
+            
+            // Create final segment after last door if needed
+            if (currentZ < z + depth) {
+                const segmentDepth = z + depth - currentZ;
+                const segmentMesh = new THREE.Mesh(
+                    new THREE.BoxGeometry(width, height, segmentDepth),
+                    wallMaterial
+                );
+                segmentMesh.position.set(x + width/2, y + height/2, currentZ + segmentDepth/2);
+                scene.add(segmentMesh);
+                
+                // Add segment physics
+                const segmentBody = new CANNON.Body({
+                    mass: 0,
+                    shape: new CANNON.Box(new CANNON.Vec3(width/2, height/2, segmentDepth/2)),
+                    position: new CANNON.Vec3(x + width/2, y + height/2, currentZ + segmentDepth/2),
+                    material: wallMaterial,
+                    collisionFilterGroup: COLLISION_GROUPS.STATIC,
+                    collisionFilterMask: COLLISION_GROUPS.DEFAULT | COLLISION_GROUPS.PLAYER | COLLISION_GROUPS.OBJECTS
+                });
+                world.addBody(segmentBody);
+                
+                wallSegments.push({ mesh: segmentMesh, body: segmentBody });
+                meshPhysicsPairs.push({ mesh: segmentMesh, body: segmentBody });
+            }
+        }
+        
+        // Return the wall segments and created doors
+        return { 
+            segments: wallSegments, 
+            doors: createdDoors 
+        };
+    } else {
+        // No doorways, use the simple wall
+        const wallBody = new CANNON.Body({
+            mass: 0, // Static body
+            shape: new CANNON.Box(new CANNON.Vec3(width/2, height/2, depth/2)),
+            material: wallMaterial,
+            position: new CANNON.Vec3(x + width/2, y + height/2, z + depth/2),
+            collisionFilterGroup: COLLISION_GROUPS.STATIC,
+            collisionFilterMask: COLLISION_GROUPS.DEFAULT | COLLISION_GROUPS.PLAYER | COLLISION_GROUPS.OBJECTS
+        });
+        
+        // Add to physics world
+        world.addBody(wallBody);
+        
+        // Track for debugging
+        meshPhysicsPairs.push({ mesh: wallMesh, body: wallBody });
+        
+        return { mesh: wallMesh, body: wallBody };
+    }
 }
 
 // Helper function to create a box body
@@ -515,7 +685,7 @@ function createGameEnvironment() {
     scene.add(pointLight2);
 }
 
-// Helper function to create a room with walls
+// Helper function to create a room with walls using the new extrude method
 function createRoom(x, z, width, depth, wallHeight, doorways = [], color = 0x666666) {
     const room = {
         x: x,
@@ -526,156 +696,98 @@ function createRoom(x, z, width, depth, wallHeight, doorways = [], color = 0x666
         doors: []
     };
     
-    // Create floor
+    // Create floor with increased y offset to prevent z-fighting
     const floorGeometry = new THREE.PlaneGeometry(width, depth);
     const floorMaterial = new THREE.MeshStandardMaterial({ 
         color: color,
         roughness: 0.7,
-        metalness: 0.2
+        metalness: 0.2,
+        side: THREE.DoubleSide
     });
     const floor = new THREE.Mesh(floorGeometry, floorMaterial);
     floor.rotation.x = -Math.PI / 2;
-    floor.position.set(x + width/2, 0, z + depth/2);
+    floor.position.set(x + width/2, 0.03, z + depth/2); // Increased offset to prevent z-fighting
     floor.receiveShadow = true;
     scene.add(floor);
     room.floor = floor;
     
-    // Create walls (accounting for doorways)
-    const createWallSegments = (startX, startZ, endX, endZ, doorwayList) => {
-        let relevantDoorways = doorwayList.filter(d => {
-            // Determine if this doorway belongs to this wall
-            const isHorizontalWall = startZ === endZ;
-            const isOnWall = isHorizontalWall 
-                ? (d.z === startZ && d.x >= startX && d.x <= endX)
-                : (d.x === startX && d.z >= startZ && d.z <= endZ);
-            return isOnWall;
-        });
-        
-        // Sort doorways
-        if (startZ === endZ) { // Horizontal wall (along X axis)
-            relevantDoorways.sort((a, b) => a.x - b.x);
-        } else { // Vertical wall (along Z axis)
-            relevantDoorways.sort((a, b) => a.z - b.z);
-        }
-        
-        let segments = [];
-        let currentStart = { x: startX, z: startZ };
-        
-        for (const doorway of relevantDoorways) {
-            const doorwayStart = startZ === endZ 
-                ? { x: doorway.x - doorway.width / 2, z: startZ }
-                : { x: startX, z: doorway.z - doorway.width / 2 };
-            
-            // Create wall segment up to the doorway
-            if ((startZ === endZ && doorwayStart.x > currentStart.x) || 
-                (startX === endX && doorwayStart.z > currentStart.z)) {
-                segments.push({
-                    startX: currentStart.x,
-                    startZ: currentStart.z,
-                    endX: doorwayStart.x,
-                    endZ: doorwayStart.z
-                });
-            }
-            
-            // Create the door
-            const doorX = startZ === endZ ? doorway.x : startX;
-            const doorZ = startZ === endZ ? startZ : doorway.z;
-            const doorDepth = startZ === endZ ? 0.2 : doorway.width;
-            const doorWidth = startZ === endZ ? doorway.width : 0.2;
-            
-            const door = createDoor(
-                doorX, 
-                0, 
-                doorZ, 
-                doorWidth, 
-                wallHeight, 
-                doorDepth, 
-                startZ === endZ
-            );
-            room.doors.push(door);
-            
-            // Update current position to after the doorway
-            currentStart = startZ === endZ 
-                ? { x: doorway.x + doorway.width / 2, z: startZ }
-                : { x: startX, z: doorway.z + doorway.width / 2 };
-        }
-        
-        // Create final segment after the last doorway
-        if ((startZ === endZ && endX > currentStart.x) || 
-            (startX === endX && endZ > currentStart.z)) {
-            segments.push({
-                startX: currentStart.x,
-                startZ: currentStart.z,
-                endX: endX,
-                endZ: endZ
-            });
-        }
-        
-        return segments;
-    };
+    // Filter doorways by wall
+    const northDoorways = doorways.filter(d => d.side === 'north');
+    const eastDoorways = doorways.filter(d => d.side === 'east');
+    const southDoorways = doorways.filter(d => d.side === 'south');
+    const westDoorways = doorways.filter(d => d.side === 'west');
     
-    // Create North wall (along X axis, at minimum Z)
-    const northWallSegments = createWallSegments(x, z, x + width, z, 
-        doorways.filter(d => d.side === 'north'));
+    // Create walls with doorways
+    const northWall = createWallWithMesh(x, 0, z, width, wallHeight, 0.2, null, northDoorways);
+    if (northWall.segments) {
+        room.walls.push(...northWall.segments);
+        room.doors.push(...northWall.doors);
+    } else {
+        room.walls.push(northWall);
+    }
     
-    // Create East wall (along Z axis, at maximum X)
-    const eastWallSegments = createWallSegments(x + width, z, x + width, z + depth, 
-        doorways.filter(d => d.side === 'east'));
+    const eastWall = createWallWithMesh(x + width - 0.2, 0, z, 0.2, wallHeight, depth, null, eastDoorways);
+    if (eastWall.segments) {
+        room.walls.push(...eastWall.segments);
+        room.doors.push(...eastWall.doors);
+    } else {
+        room.walls.push(eastWall);
+    }
     
-    // Create South wall (along X axis, at maximum Z)
-    const southWallSegments = createWallSegments(x, z + depth, x + width, z + depth, 
-        doorways.filter(d => d.side === 'south'));
+    const southWall = createWallWithMesh(x, 0, z + depth - 0.2, width, wallHeight, 0.2, null, southDoorways);
+    if (southWall.segments) {
+        room.walls.push(...southWall.segments);
+        room.doors.push(...southWall.doors);
+    } else {
+        room.walls.push(southWall);
+    }
     
-    // Create West wall (along Z axis, at minimum X)
-    const westWallSegments = createWallSegments(x, z, x, z + depth, 
-        doorways.filter(d => d.side === 'west'));
-    
-    // Combine all segments
-    const allSegments = [
-        ...northWallSegments,
-        ...eastWallSegments,
-        ...southWallSegments,
-        ...westWallSegments
-    ];
-    
-    // Create actual wall objects for each segment
-    for (const segment of allSegments) {
-        let wallWidth, wallDepth, wallX, wallZ;
-        
-        if (segment.startZ === segment.endZ) { // Horizontal wall (along X)
-            wallWidth = segment.endX - segment.startX;
-            wallDepth = 0.2;
-            wallX = segment.startX + wallWidth / 2;
-            wallZ = segment.startZ;
-        } else { // Vertical wall (along Z)
-            wallWidth = 0.2;
-            wallDepth = segment.endZ - segment.startZ;
-            wallX = segment.startX;
-            wallZ = segment.startZ + wallDepth / 2;
-        }
-        
-        if (wallWidth > 0 && wallDepth > 0) {
-            const wall = createWallWithMesh(wallX, 0, wallZ, wallWidth, wallHeight, wallDepth, wallMaterial);
-            room.walls.push(wall);
-        }
+    const westWall = createWallWithMesh(x, 0, z, 0.2, wallHeight, depth, null, westDoorways);
+    if (westWall.segments) {
+        room.walls.push(...westWall.segments);
+        room.doors.push(...westWall.doors);
+    } else {
+        room.walls.push(westWall);
     }
     
     return room;
 }
 
 // Helper function to create a corridor
-function createCorridor(x, z, width, length, wallHeight, orientation) {
+function createCorridor(x, z, width, length, wallHeight, orientation, doorways = []) {
     const isHorizontal = orientation === 'horizontal';
     const corridorWidth = isHorizontal ? length : width;
     const corridorDepth = isHorizontal ? width : length;
     
+    // Adjust doorways to the orientation of the corridor
+    const adjustedDoorways = doorways.map(doorway => {
+        // Deep copy the doorway to avoid modifying the original
+        const newDoorway = { ...doorway };
+        
+        // Adjust x and z based on orientation if needed
+        if (isHorizontal) {
+            // No changes needed for horizontal corridors
+        } else {
+            // For vertical corridors, swap sides north->east, south->west, etc.
+            switch (newDoorway.side) {
+                case 'north': newDoorway.side = 'west'; break;
+                case 'east': newDoorway.side = 'north'; break;
+                case 'south': newDoorway.side = 'east'; break;
+                case 'west': newDoorway.side = 'south'; break;
+            }
+        }
+        
+        return newDoorway;
+    });
+    
+    // Create a room with the corridor dimensions
     return createRoom(
         x, 
         z, 
         corridorWidth, 
         corridorDepth, 
         wallHeight, 
-        [], // No doorways needed as doors are defined in the rooms
+        adjustedDoorways, // Use the adjusted doorways
         0x777777 // Grey color for corridors
     );
 }
@@ -898,7 +1010,9 @@ function createDoor(x, y, z, width, height, depth, isHorizontal = true) {
     const doorMaterial = new THREE.MeshStandardMaterial({ 
         color: 0x8B4513,
         roughness: 0.7,
-        metalness: 0.2 
+        metalness: 0.2,
+        emissive: 0x000000, // Add emissive property for highlighting
+        emissiveIntensity: 0
     });
     const doorMesh = new THREE.Mesh(doorGeometry, doorMaterial);
     doorMesh.position.set(x, y + height/2, z);
@@ -908,9 +1022,11 @@ function createDoor(x, y, z, width, height, depth, isHorizontal = true) {
 
     // Add a door frame to make it more visible
     const frameThickness = 0.1;
-    const frameWidth = isHorizontal ? width + frameThickness * 2 : width;
+    // Add a tiny offset to prevent z-fighting with walls
+    const zFightingOffset = 0.01;
+    const frameWidth = isHorizontal ? width + frameThickness * 2 : width + zFightingOffset;
     const frameHeight = height + frameThickness * 2;
-    const frameDepth = isHorizontal ? depth : depth + frameThickness * 2;
+    const frameDepth = isHorizontal ? depth + zFightingOffset : depth + frameThickness * 2;
     
     const frameGeometry = new THREE.BoxGeometry(frameWidth, frameHeight, frameDepth);
     // Use wireframe for the frame to make it visible but not block view
@@ -944,7 +1060,8 @@ function createDoor(x, y, z, width, height, depth, isHorizontal = true) {
         isHorizontal: isHorizontal,
         isOpen: false,
         originalPosition: new THREE.Vector3(x, y + height/2, z),
-        animating: false
+        animating: false,
+        highlighted: false
     };
 
     // Add to physics-mesh pairs for animation
@@ -985,106 +1102,114 @@ function createTable(x, y, z, width, height, depth, material) {
     return { mesh: tableMesh, body: tableBody };
 }
 
-// Function to interact with doors
+// Helper function to toggle door open/closed state
 function toggleDoor(doorObject) {
-    if (!doorObject) return;
+    // Don't allow toggling if door is already animating
+    if (doorObject.animating) return;
     
-    const door = doorObject;
-    const openDistance = 2; // Distance to move the door when opened
+    doorObject.animating = true;
     
-    // Don't retrigger animation if already in progress
-    if (door.animating) return;
-    door.animating = true;
+    // Get the door's position and calculate the target position
+    const currentPos = doorObject.mesh.position.clone();
+    let targetPos = currentPos.clone();
     
-    if (!door.isOpen) {
-        // Open the door
-        const targetPosition = door.originalPosition.clone();
-        if (door.isHorizontal) {
-            targetPosition.z += openDistance; // Move horizontally
-        } else {
-            targetPosition.x += openDistance; // Move vertically
-        }
+    // Current and target rotations
+    const currentRot = doorObject.mesh.rotation.clone();
+    let targetRot = currentRot.clone();
+    
+    // Calculate offset based on door orientation
+    const openOffset = 2.0; // How far the door should move
+    
+    if (doorObject.isOpen) {
+        // Door is open, close it
+        targetPos.copy(doorObject.originalPosition);
         
-        // Animate the door opening
-        const duration = 500; // milliseconds
-        const startTime = Date.now();
-        const startPosition = door.mesh.position.clone();
-        const frameStartPosition = door.frame.position.clone();
-        
-        function animateDoorOpen() {
-            const elapsed = Date.now() - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            
-            // Lerp between positions
-            door.mesh.position.lerpVectors(startPosition, targetPosition, progress);
-            door.frame.position.lerpVectors(frameStartPosition, targetPosition, progress);
-            
-            // Update physics body position
-            const newPosition = new CANNON.Vec3(
-                door.mesh.position.x,
-                door.mesh.position.y,
-                door.mesh.position.z
-            );
-            door.body.position.copy(newPosition);
-            
-            if (progress < 1) {
-                requestAnimationFrame(animateDoorOpen);
-            } else {
-                door.isOpen = true;
-                door.animating = false;
-                console.log("Door opened fully");
-            }
-        }
-        
-        animateDoorOpen();
+        // Reset rotation when closing
+        targetRot.y = 0;
     } else {
-        // Close the door
-        const targetPosition = door.originalPosition.clone();
-        const startPosition = door.mesh.position.clone();
-        const frameStartPosition = door.frame.position.clone();
+        // Door is closed, open it
+        if (doorObject.isHorizontal) {
+            targetPos.x += openOffset; // Slide horizontally
+            // Add tiny z offset to prevent z-fighting with walls
+            targetPos.z += 0.02;
+            targetRot.y = Math.PI / 12; // Rotate slightly (15 degrees)
+        } else {
+            targetPos.z += openOffset; // Slide vertically
+            // Add tiny x offset to prevent z-fighting with walls
+            targetPos.x += 0.02;
+            targetRot.y = -Math.PI / 12; // Rotate slightly in opposite direction
+        }
+    }
+    
+    // Animation properties
+    const startTime = Date.now();
+    const duration = 500; // Animation time in milliseconds
+    
+    // Animation function
+    function animateDoor() {
+        const elapsedTime = Date.now() - startTime;
+        const progress = Math.min(elapsedTime / duration, 1);
         
-        // Animate the door closing
-        const duration = 500; // milliseconds
-        const startTime = Date.now();
+        // Ease in/out using sine function
+        const easedProgress = 0.5 - 0.5 * Math.cos(progress * Math.PI);
         
-        function animateDoorClose() {
-            const elapsed = Date.now() - startTime;
-            const progress = Math.min(elapsed / duration, 1);
+        // Linear interpolation between current and target positions
+        const newX = currentPos.x + (targetPos.x - currentPos.x) * easedProgress;
+        const newY = currentPos.y + (targetPos.y - currentPos.y) * easedProgress;
+        const newZ = currentPos.z + (targetPos.z - currentPos.z) * easedProgress;
+        
+        // Linear interpolation for rotation
+        const newRotY = currentRot.y + (targetRot.y - currentRot.y) * easedProgress;
+        
+        // Update door position and rotation
+        doorObject.mesh.position.set(newX, newY, newZ);
+        doorObject.mesh.rotation.y = newRotY;
+        
+        // Only update the physics body position (not rotation - would complicate collision)
+        doorObject.body.position.set(newX, newY, newZ);
+        
+        // Also update the frame position (not rotation - keep it stable)
+        doorObject.frame.position.set(newX, newY, newZ);
+        
+        // Continue animation if not finished
+        if (progress < 1) {
+            requestAnimationFrame(animateDoor);
+        } else {
+            // Animation complete
+            doorObject.isOpen = !doorObject.isOpen;
+            doorObject.animating = false;
             
-            // Lerp between positions
-            door.mesh.position.lerpVectors(startPosition, targetPosition, progress);
-            door.frame.position.lerpVectors(frameStartPosition, targetPosition, progress);
-            
-            // Update physics body position
-            const newPosition = new CANNON.Vec3(
-                door.mesh.position.x,
-                door.mesh.position.y,
-                door.mesh.position.z
-            );
-            door.body.position.copy(newPosition);
-            
-            if (progress < 1) {
-                requestAnimationFrame(animateDoorClose);
+            // Update physics for the door
+            if (doorObject.isOpen) {
+                // Make the physics body inactive when door is open by disabling collision response
+                doorObject.body.collisionResponse = false;
+                
+                // Also update collision filter to not interact with player
+                doorObject.body.collisionFilterMask = COLLISION_GROUPS.DEFAULT | COLLISION_GROUPS.OBJECTS;
             } else {
-                door.isOpen = false;
-                door.animating = false;
-                console.log("Door closed fully");
+                // Re-enable collision when door is closed
+                doorObject.body.collisionResponse = true;
+                
+                // Restore original collision filter
+                doorObject.body.collisionFilterMask = COLLISION_GROUPS.DEFAULT | COLLISION_GROUPS.PLAYER | COLLISION_GROUPS.OBJECTS;
             }
         }
-        
-        animateDoorClose();
     }
+    
+    // Start the animation
+    animateDoor();
 }
 
-// Add event listeners for player interactions with doors
-document.addEventListener('keydown', (event) => {
-    if (event.key === 'e' || event.key === 'E') {
-        // Check if player is near a door
+// Add event listener for door interaction
+document.addEventListener('keydown', function(event) {
+    // 'E' key for interacting with doors
+    if ((event.key === 'e' || event.key === 'E') && playerBody) {
+        const playerPosition = playerBody.position;
         let nearestDoor = null;
         let minDistance = Infinity;
         
+        // Find the nearest door within interaction range
         for (const door of doors) {
-            const playerPosition = playerBody.position;
             const doorPosition = door.body.position;
             
             // Calculate distance between player and door
@@ -1102,21 +1227,7 @@ document.addEventListener('keydown', (event) => {
         
         // If we found a door to interact with
         if (nearestDoor) {
-            console.log(`Interacting with door at position (${nearestDoor.body.position.x.toFixed(2)}, ${nearestDoor.body.position.y.toFixed(2)}, ${nearestDoor.body.position.z.toFixed(2)})`);
-            console.log(`Door is currently ${nearestDoor.isOpen ? 'open' : 'closed'}`);
-            
-            // Temporarily highlight the door
-            const originalColor = nearestDoor.mesh.material.color.clone();
-            nearestDoor.mesh.material.color.set(0xff0000); // Set to red
-            
-            // Reset color after a short delay
-            setTimeout(() => {
-                nearestDoor.mesh.material.color.copy(originalColor);
-            }, 200);
-            
             toggleDoor(nearestDoor);
-        } else {
-            console.log("No doors within interaction range");
         }
     }
 });
@@ -1171,8 +1282,8 @@ function animate() {
     // Get current movement key status
     const keys = checkMovementKeys();
     
-    // DIRECT POSITION UPDATE with increased speed
-    const moveSpeed = 0.3; // Units per frame - increased for better responsiveness
+    // REDUCED SPEED and proper collision detection
+    const moveSpeed = 0.15; // Reduced speed (was 0.3)
     
     // Get camera direction vectors for movement relative to where player is looking
     const frontVector = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
@@ -1195,16 +1306,43 @@ function animate() {
     if (moveDirection.length() > 0) {
         moveDirection.normalize();
         
-        // Apply the movement to player position directly
+        // Apply the movement to player position with collision detection
         const movement = moveDirection.multiplyScalar(moveSpeed);
-        playerBody.position.x += movement.x;
-        playerBody.position.z += movement.z;
         
-        // Update the green wireframe to match player position too
-        for(let i = 0; i < meshPhysicsPairs.length; i++) {
-            const pair = meshPhysicsPairs[i];
-            if (pair.body === playerBody) {
-                pair.mesh.position.copy(playerBody.position);
+        // Check for collisions using multiple raycasts
+        const canMove = !checkCollisionInDirection(movement);
+        
+        // Only move if no collision detected
+        if (canMove) {
+            playerBody.position.x += movement.x;
+            playerBody.position.z += movement.z;
+            
+            // Update the green wireframe to match player position too
+            for(let i = 0; i < meshPhysicsPairs.length; i++) {
+                const pair = meshPhysicsPairs[i];
+                if (pair.body === playerBody) {
+                    pair.mesh.position.copy(playerBody.position);
+                }
+            }
+        } else {
+            // We hit something, try to slide along the wall
+            const slideVector = calculateSlideVector(moveDirection);
+            if (slideVector && slideVector.length() > 0) {
+                const slideMovement = slideVector.multiplyScalar(moveSpeed * 0.8); // Slightly slower sliding
+                
+                // Check if we can slide in this direction
+                if (!checkCollisionInDirection(slideMovement)) {
+                    playerBody.position.x += slideMovement.x;
+                    playerBody.position.z += slideMovement.z;
+                    
+                    // Update the green wireframe
+                    for(let i = 0; i < meshPhysicsPairs.length; i++) {
+                        const pair = meshPhysicsPairs[i];
+                        if (pair.body === playerBody) {
+                            pair.mesh.position.copy(playerBody.position);
+                        }
+                    }
+                }
             }
         }
     }
@@ -1288,6 +1426,16 @@ function checkDoorProximity() {
     let nearestDoor = null;
     let minDistance = Infinity;
     
+    // Reset all door highlights first
+    for (const door of doors) {
+        if (door.highlighted) {
+            door.highlighted = false;
+            // Reset door material emissive properties
+            door.mesh.material.emissive.set(0x000000);
+            door.mesh.material.emissiveIntensity = 0;
+        }
+    }
+    
     for (const door of doors) {
         const playerPosition = playerBody.position;
         const doorPosition = door.body.position;
@@ -1308,7 +1456,107 @@ function checkDoorProximity() {
     // Show/hide the door indicator based on proximity
     if (nearestDoor) {
         uiElements.doorIndicator.style.display = 'block';
+        
+        // Highlight the nearest door
+        nearestDoor.highlighted = true;
+        nearestDoor.mesh.material.emissive.set(0x885511); // Subtle highlight color
+        nearestDoor.mesh.material.emissiveIntensity = 0.5;
     } else {
         uiElements.doorIndicator.style.display = 'none';
     }
+}
+
+// Helper function to check for collisions in a specific direction
+function checkCollisionInDirection(direction) {
+    const rayLength = 0.5; // Player radius + a small buffer
+    const playerPos = playerBody.position;
+    const playerRadius = 0.3; // Half of player width
+    
+    // Create ray starting positions at four points around the player
+    const rayStarts = [
+        // Center
+        new CANNON.Vec3(playerPos.x, playerPos.y, playerPos.z),
+        // Front
+        new CANNON.Vec3(playerPos.x + playerRadius * Math.sign(direction.x), playerPos.y, playerPos.z),
+        // Back
+        new CANNON.Vec3(playerPos.x - playerRadius * Math.sign(direction.x), playerPos.y, playerPos.z),
+        // Left
+        new CANNON.Vec3(playerPos.x, playerPos.y, playerPos.z + playerRadius * Math.sign(direction.z)),
+        // Right
+        new CANNON.Vec3(playerPos.x, playerPos.y, playerPos.z - playerRadius * Math.sign(direction.z))
+    ];
+    
+    // Check collisions from each ray starting position
+    for (const rayStart of rayStarts) {
+        const rayEnd = new CANNON.Vec3(
+            rayStart.x + direction.x * rayLength,
+            rayStart.y,
+            rayStart.z + direction.z * rayLength
+        );
+        
+        const result = new CANNON.RaycastResult();
+        world.raycastClosest(
+            rayStart, 
+            rayEnd, 
+            {
+                collisionFilterMask: COLLISION_GROUPS.STATIC | COLLISION_GROUPS.DOOR,
+                skipBackfaces: true
+            }, 
+            result
+        );
+        
+        // If any ray hits, return true (collision detected)
+        if (result.hasHit) {
+            return true;
+        }
+    }
+    
+    // No collisions detected
+    return false;
+}
+
+// Helper function to calculate slide vector along wall
+function calculateSlideVector(moveDirection) {
+    // Cast a ray to find the wall normal
+    const rayLength = 0.5;
+    const rayStart = new CANNON.Vec3(
+        playerBody.position.x,
+        playerBody.position.y,
+        playerBody.position.z
+    );
+    
+    const rayEnd = new CANNON.Vec3(
+        rayStart.x + moveDirection.x * rayLength,
+        rayStart.y,
+        rayStart.z + moveDirection.z * rayLength
+    );
+    
+    const result = new CANNON.RaycastResult();
+    world.raycastClosest(
+        rayStart, 
+        rayEnd, 
+        {
+            collisionFilterMask: COLLISION_GROUPS.STATIC | COLLISION_GROUPS.DOOR,
+            skipBackfaces: true
+        }, 
+        result
+    );
+    
+    if (result.hasHit) {
+        // Get the normal of the surface we hit
+        const normal = result.hitNormalWorld;
+        normal.y = 0; // Keep sliding on horizontal plane
+        normal.normalize();
+        
+        // Project our movement onto the plane defined by the normal
+        // This gives us a vector that slides along the wall
+        const dot = moveDirection.x * normal.x + moveDirection.z * normal.z;
+        const slideX = moveDirection.x - (normal.x * dot);
+        const slideZ = moveDirection.z - (normal.z * dot);
+        
+        // Create slide vector and normalize it
+        return new THREE.Vector3(slideX, 0, slideZ).normalize();
+    }
+    
+    return null;
 }
