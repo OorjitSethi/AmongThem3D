@@ -131,6 +131,25 @@ const timeStep = 1/60; // Fixed physics timestep in seconds
 const maxSubSteps = 5; // Maximum allowed substeps per frame
 let lastTime; // Track last frame time for physics calculations
 
+// Texture loader
+const textureLoader = new THREE.TextureLoader();
+const wallTexture = textureLoader.load('./textures/walls/wall_metal.jpg');
+// Configure texture repeating
+wallTexture.wrapS = wallTexture.wrapT = THREE.RepeatWrapping;
+wallTexture.repeat.set(2, 2); // Adjust repeating as needed
+
+// Create a folder for floor textures
+// Will need to place floor texture at './textures/floors/floor_metal.jpg'
+const floorTexture = textureLoader.load('./textures/floors/floor_metal.jpg');
+floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
+floorTexture.repeat.set(5, 5); // More repetition for floors
+
+// Door texture - create a folder for door textures
+// Will need to place door texture at './textures/doors/door_metal.jpg'
+const doorTexture = textureLoader.load('./textures/doors/door_metal.jpg');
+doorTexture.wrapS = doorTexture.wrapT = THREE.RepeatWrapping;
+doorTexture.repeat.set(1, 1);
+
 // Arrays to track meshes and their corresponding physics bodies
 let meshes = [];
 let meshPhysicsPairs = [];
@@ -202,7 +221,8 @@ function createWallWithMesh(x, y, z, width, height, depth, material, doorways = 
     // Fix wall visibility by using simpler BoxGeometry for walls
     const wallGeometry = new THREE.BoxGeometry(width, height, depth);
     const wallMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0x555555, 
+        map: wallTexture, // Use the loaded texture
+        color: 0xffffff, // Set color to white to show texture properly
         roughness: 0.8, 
         metalness: 0.2,
         wireframe: false 
@@ -236,7 +256,12 @@ function createWallWithMesh(x, y, z, width, height, depth, material, doorways = 
                     const segmentWidth = doorStartX - currentX;
                     const segmentMesh = new THREE.Mesh(
                         new THREE.BoxGeometry(segmentWidth, height, depth),
-                        wallMaterial
+                        new THREE.MeshStandardMaterial({
+                            map: wallTexture,
+                            color: 0xffffff,
+                            roughness: 0.8,
+                            metalness: 0.2
+                        })
                     );
                     segmentMesh.position.set(currentX + segmentWidth/2, y + height/2, z + depth/2);
                     scene.add(segmentMesh);
@@ -277,7 +302,12 @@ function createWallWithMesh(x, y, z, width, height, depth, material, doorways = 
                 const segmentWidth = x + width - currentX;
                 const segmentMesh = new THREE.Mesh(
                     new THREE.BoxGeometry(segmentWidth, height, depth),
-                    wallMaterial
+                    new THREE.MeshStandardMaterial({
+                        map: wallTexture,
+                        color: 0xffffff,
+                        roughness: 0.8,
+                        metalness: 0.2
+                    })
                 );
                 segmentMesh.position.set(currentX + segmentWidth/2, y + height/2, z + depth/2);
                 scene.add(segmentMesh);
@@ -311,7 +341,12 @@ function createWallWithMesh(x, y, z, width, height, depth, material, doorways = 
                     const segmentDepth = doorStartZ - currentZ;
                     const segmentMesh = new THREE.Mesh(
                         new THREE.BoxGeometry(width, height, segmentDepth),
-                        wallMaterial
+                        new THREE.MeshStandardMaterial({
+                            map: wallTexture,
+                            color: 0xffffff,
+                            roughness: 0.8,
+                            metalness: 0.2
+                        })
                     );
                     segmentMesh.position.set(x + width/2, y + height/2, currentZ + segmentDepth/2);
                     scene.add(segmentMesh);
@@ -352,7 +387,12 @@ function createWallWithMesh(x, y, z, width, height, depth, material, doorways = 
                 const segmentDepth = z + depth - currentZ;
                 const segmentMesh = new THREE.Mesh(
                     new THREE.BoxGeometry(width, height, segmentDepth),
-                    wallMaterial
+                    new THREE.MeshStandardMaterial({
+                        map: wallTexture,
+                        color: 0xffffff,
+                        roughness: 0.8,
+                        metalness: 0.2
+                    })
                 );
                 segmentMesh.position.set(x + width/2, y + height/2, currentZ + segmentDepth/2);
                 scene.add(segmentMesh);
@@ -699,7 +739,8 @@ function createRoom(x, z, width, depth, wallHeight, doorways = [], color = 0x666
     // Create floor with increased y offset to prevent z-fighting
     const floorGeometry = new THREE.PlaneGeometry(width, depth);
     const floorMaterial = new THREE.MeshStandardMaterial({ 
-        color: color,
+        map: floorTexture,
+        color: 0xffffff, // White base to show texture properly
         roughness: 0.7,
         metalness: 0.2,
         side: THREE.DoubleSide
@@ -1008,7 +1049,8 @@ function createDoor(x, y, z, width, height, depth, isHorizontal = true) {
     // Create a door mesh
     const doorGeometry = new THREE.BoxGeometry(width, height, depth);
     const doorMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0x8B4513,
+        map: doorTexture,
+        color: 0xffffff, // White color to show texture properly
         roughness: 0.7,
         metalness: 0.2,
         emissive: 0x000000, // Add emissive property for highlighting
