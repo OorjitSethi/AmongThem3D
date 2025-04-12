@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Among Us 3D - FPS Game</title>
+    <link rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px;
+            z-index: 100;
+        }
+        #error-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: red;
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+            z-index: 999;
+            max-width: 80%;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h1>Among Us 3D - The Skeld Map</h1>
+        <p>Click to start | WASD to move | SPACE to jump | Mouse to look around</p>
+        <p>Experience The Skeld map in first-person with physics-based movement!</p>
+    </div>
+    
+    <div id="error-container"></div>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html> 
