@@ -1,13 +1,32 @@
-# Three.js FPS Game
+# Among Us 3D
 
-A simple first-person game built with Three.js where you can walk around and look around a 3D environment.
+A 3D first-person interpretation of the popular game "Among Us", built with Three.js and Cannon.js physics. Players can explore a spaceship environment similar to the original game, with interactive elements like doors, vents, and tasks.
 
-## Features
+## Game Concept
+
+The game recreates the Among Us experience in a first-person 3D environment:
+- Crewmates must complete tasks around the spaceship
+- Impostors try to sabotage the ship and eliminate crewmates
+- Players can call emergency meetings when they find something suspicious
+- Voting system to determine who gets ejected from the ship
+
+## Current Features
 
 - First-person camera with mouse look controls
-- WASD movement
-- Simple physics (gravity and jumping)
-- 3D environment with obstacles
+- WASD/Arrow keys movement with physics-based collision detection
+- Interactive sliding doors that can be opened/closed with 'E' key
+- Visual door highlighting when in interaction range
+- Multiple rooms connected by corridors
+- Physics-based movement and environment interaction
+
+## Planned Features
+
+- Task completion system
+- Vent system for impostor movement
+- Sabotage mechanics
+- Multiplayer functionality
+- Emergency meeting and voting system
+- Kill animations and reporting system
 
 ## How to Run
 
@@ -35,24 +54,18 @@ A simple first-person game built with Three.js where you can walk around and loo
 ## Controls
 
 - **Click** on the game window to enable mouse look controls
-- **W, A, S, D** keys to move (forward, left, backward, right)
+- **W, A, S, D** keys or **Arrow keys** to move
 - **Space** to jump
+- **E** to interact with doors and other objects
 - **ESC** to release the mouse
 
 ## Implementation Details
 
 This game uses:
 - Three.js for 3D rendering
-- PointerLockControls from Three.js for mouse look
-- Custom movement and physics implementation
-
-## Extending the Game
-
-To add more features to the game, consider:
-- Adding collision detection with the cubes
-- Implementing a shooting mechanism
-- Adding game objectives or enemies
-- Improving the environment design
+- Cannon.js for physics simulations
+- Custom collision detection and interaction systems
+- Dynamic lighting and materials
 
 ## License
 
